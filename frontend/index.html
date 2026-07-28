@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hotel Agent · Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="brand">
+    <span class="dot"></span>
+    <div>
+      <h1>Hotel Agent</h1>
+      <span>SQL + booking console</span>
+    </div>
+  </div>
+
+  <nav>
+    <div class="nav-item active" data-page="dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+      Dashboard
+    </div>
+    <div class="nav-item" data-page="ask">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h16v12H8l-4 4V4z"/></svg>
+      Ask
+    </div>
+    <div class="nav-item" data-page="actions">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v18M3 12h18"/></svg>
+      Actions
+    </div>
+    <div class="nav-item manager" data-page="hr">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="10" width="16" height="10" rx="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+      HR &amp; Payroll
+    </div>
+  </nav>
+
+  <div class="sidebar-foot">
+    <div class="conn-row"><span class="conn-dot" id="connDot"></span><span id="connLabel">checking…</span></div>
+    <input class="api-input" id="apiBase" type="text" value="http://localhost:8000" spellcheck="false">
+    <input class="api-input" id="staffKey" type="password" placeholder="Staff key" spellcheck="false">
+  </div>
+</div>
+
+<main>
+
+  <!-- DASHBOARD -->
+  <section class="page active" id="page-dashboard">
+    <div class="page-head">
+      <div class="eyebrow">Overview</div>
+      <h2>Hotels &amp; bookings</h2>
+      <p class="sub">Live read from the database. Refresh anytime — nothing here is cached.</p>
+    </div>
+
+    <div class="grid-2" style="margin-bottom:24px;">
+      <div class="card">
+        <div class="stat" id="statHotels">–</div>
+        <div class="stat-label">Hotels on file</div>
+      </div>
+      <div class="card">
+        <div class="stat" id="statBookings">–</div>
+        <div class="stat-label">Active bookings</div>
+      </div>
+    </div>
+
+    <div class="section-title">Hotels</div>
+    <div class="card" style="padding:0; overflow-x:auto;">
+      <table id="hotelsTable">
+        <thead><tr><th>Name</th><th>Address</th></tr></thead>
+        <tbody><tr><td colspan="2" class="empty-state">Loading…</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="section-title">Bookings</div>
+    <div class="card" style="padding:0; overflow-x:auto;">
+      <table id="bookingsTable">
+        <thead><tr><th>Guest</th><th>Room</th><th>Hotel</th><th>Check-in</th><th>Check-out</th><th>Status</th></tr></thead>
+        <tbody><tr><td colspan="6" class="empty-state">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ASK -->
+  <section class="page" id="page-ask">
+    <div class="page-head">
+      <div class="eyebrow">Natural language → SQL</div>
+      <h2>Ask the database</h2>
+      <p class="sub">Type a question in plain English. The agent writes a read-only SELECT, runs it, and shows you both.</p>
+    </div>
+
+    <div class="card">
+      <textarea id="askInput" placeholder="e.g. Which guests are checking in this week?"></textarea>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="askBtn">
+          <span class="spinner"></span><span class="btn-text">Run query</span>
+        </button>
+        <button class="btn btn-ghost" id="askClear">Clear</button>
+      </div>
+    </div>
+
+    <div class="result-box" id="askResult">
+      <div class="section-title">Generated SQL</div>
+      <div class="code-block" id="askSql"></div>
+
+      <div class="section-title">Result</div>
+      <div class="card" style="padding:0; overflow-x:auto;" id="askResultWrap">
+        <table id="askResultTable"></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACTIONS -->
+  <section class="page" id="page-actions">
+    <div class="page-head">
+      <div class="eyebrow">Propose → confirm</div>
+      <h2>Book or cancel</h2>
+      <p class="sub">Pick an action, fill in the fields, and review the preview. Nothing writes to the database until you explicitly confirm.</p>
+    </div>
+
+    <div class="form-tabs" id="actionTabs">
+      <button class="form-tab active" data-form="book">Book room</button>
+      <button class="form-tab" data-form="cancel">Cancel booking</button>
+      <button class="form-tab" data-form="addRoom">Add room</button>
+      <button class="form-tab" data-form="updateRoomType">Update room type</button>
+      <button class="form-tab" data-form="recordSale">Record sale</button>
+    </div>
+
+    <!-- BOOK -->
+    <div class="card action-form active" id="form-book">
+      <label class="field-label" for="bookRoom">Room</label>
+      <select id="bookRoom"><option value="">Loading rooms…</option></select>
+
+      <label class="field-label" for="bookGuest">Guest name</label>
+      <input type="text" id="bookGuest" placeholder="e.g. John Doe">
+
+      <div class="field-row">
+        <div>
+          <label class="field-label" for="bookCheckIn">Check-in</label>
+          <input type="date" id="bookCheckIn">
+        </div>
+        <div>
+          <label class="field-label" for="bookCheckOut">Check-out</label>
+          <input type="date" id="bookCheckOut">
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="bookBtn"><span class="spinner"></span><span class="btn-text">Propose booking</span></button>
+      </div>
+    </div>
+
+    <!-- CANCEL -->
+    <div class="card action-form" id="form-cancel">
+      <label class="field-label" for="cancelBooking">Booking</label>
+      <select id="cancelBooking"><option value="">Loading bookings…</option></select>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="cancelBtn"><span class="spinner"></span><span class="btn-text">Propose cancellation</span></button>
+      </div>
+    </div>
+
+    <!-- ADD ROOM -->
+    <div class="card action-form" id="form-addRoom">
+      <label class="field-label" for="addRoomHotel">Hotel</label>
+      <select id="addRoomHotel"><option value="">Loading hotels…</option></select>
+
+      <label class="field-label" for="addRoomType">Room type name</label>
+      <input type="text" id="addRoomType" placeholder="e.g. Deluxe">
+
+      <label class="field-label" for="addRoomNumber">Room number</label>
+      <input type="text" id="addRoomNumber" placeholder="e.g. 301">
+
+      <div class="field-row">
+        <div>
+          <label class="field-label" for="addRoomPrice">Price per night</label>
+          <input type="number" id="addRoomPrice" placeholder="e.g. 4000">
+        </div>
+        <div>
+          <label class="field-label" for="addRoomOccupancy">Max occupancy</label>
+          <input type="number" id="addRoomOccupancy" placeholder="e.g. 2">
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="addRoomBtn"><span class="spinner"></span><span class="btn-text">Propose new room</span></button>
+      </div>
+    </div>
+
+    <!-- UPDATE ROOM TYPE -->
+    <div class="card action-form" id="form-updateRoomType">
+      <label class="field-label" for="updateRoomTypeSelect">Room type</label>
+      <select id="updateRoomTypeSelect"><option value="">Loading room types…</option></select>
+
+      <p class="hint">Leave a field blank to keep it unchanged.</p>
+
+      <label class="field-label" for="updateRoomTypeName">New name</label>
+      <input type="text" id="updateRoomTypeName" placeholder="leave blank to keep current name">
+
+      <div class="field-row">
+        <div>
+          <label class="field-label" for="updateRoomTypePrice">New price</label>
+          <input type="number" id="updateRoomTypePrice" placeholder="leave blank to keep current price">
+        </div>
+        <div>
+          <label class="field-label" for="updateRoomTypeOccupancy">New max occupancy</label>
+          <input type="number" id="updateRoomTypeOccupancy" placeholder="leave blank to keep current">
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="updateRoomTypeBtn"><span class="spinner"></span><span class="btn-text">Propose change</span></button>
+      </div>
+    </div>
+
+    <!-- RECORD SALE -->
+    <div class="card action-form" id="form-recordSale">
+      <p class="hint">This logs a day's sales. You'll only see a confirmation of what you entered — monthly totals are visible to managers only.</p>
+
+      <label class="field-label" for="saleHotel">Hotel</label>
+      <select id="saleHotel"><option value="">Loading hotels…</option></select>
+
+      <div class="field-row">
+        <div>
+          <label class="field-label" for="saleAmount">Amount</label>
+          <input type="number" id="saleAmount" placeholder="e.g. 12500">
+        </div>
+        <div>
+          <label class="field-label" for="saleDate">Date</label>
+          <input type="date" id="saleDate">
+        </div>
+      </div>
+
+      <label class="field-label" for="saleCategory">Category (optional)</label>
+      <input type="text" id="saleCategory" placeholder="e.g. Room revenue, Restaurant, Laundry">
+
+      <label class="field-label" for="saleEnteredBy">Your name</label>
+      <input type="text" id="saleEnteredBy" placeholder="e.g. Ramesh (Front Desk)">
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="saleBtn"><span class="spinner"></span><span class="btn-text">Propose sale entry</span></button>
+      </div>
+    </div>
+
+    <div class="result-box" id="actionPreviewBox">
+      <div class="section-title">Preview</div>
+      <div class="card" id="actionPreviewCard"></div>
+      <p class="expiry-note" id="actionExpiry"></p>
+      <div class="btn-row">
+        <button class="btn btn-primary" id="confirmBtn">
+          <span class="spinner"></span><span class="btn-text">Confirm &amp; execute</span>
+        </button>
+        <button class="btn btn-danger" id="discardBtn">Discard</button>
+      </div>
+    </div>
+
+    <div class="result-box" id="actionOutcomeBox">
+      <div class="section-title">Result</div>
+      <div class="card" id="actionOutcomeCard"></div>
+    </div>
+  </section>
+
+  <!-- HR & PAYROLL (manager key required) -->
+  <section class="page" id="page-hr">
+
+    <div class="card lock-gate" id="hrGate">
+      <svg class="lock-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="10" width="16" height="10" rx="1.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+      <h3>Manager access required</h3>
+      <p>Salary and employee data are kept separate from the staff console. Enter the manager key to continue.</p>
+      <input type="password" id="hrKeyInput" placeholder="Manager key" spellcheck="false">
+      <button class="btn btn-primary" id="hrUnlockBtn" style="width:100%; justify-content:center;">Unlock</button>
+      <p class="expiry-note" id="hrGateError" style="display:none; color:var(--red);"></p>
+    </div>
+
+    <div class="hr-content" id="hrContent">
+
+      <div class="manager-strip">
+        <span>Manager mode — HR &amp; payroll actions are logged separately from staff activity.</span>
+        <button id="hrLockBtn">Lock</button>
+      </div>
+
+      <div class="page-head">
+        <div class="eyebrow">HR &amp; Payroll</div>
+        <h2>Employees &amp; salaries</h2>
+        <p class="sub">Hire, terminate, adjust salaries, and record payments — all via natural language, confirmed before anything is written.</p>
+      </div>
+
+      <div class="grid-2" style="margin-bottom:24px;">
+        <div class="card">
+          <div class="stat" id="statEmployees">–</div>
+          <div class="stat-label">Active employees</div>
+        </div>
+        <div class="card">
+          <div class="stat" style="color:var(--amber);">🔒</div>
+          <div class="stat-label">Manager-only data</div>
+        </div>
+      </div>
+
+      <div class="section-title">Employees</div>
+      <div class="card" style="padding:0; overflow-x:auto;">
+        <table id="employeesTable">
+          <thead><tr><th>Name</th><th>Role</th><th>Hotel</th><th>Salary</th><th>Hired</th><th>Status</th></tr></thead>
+          <tbody><tr><td colspan="6" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="section-title" id="payrollPeriodLabel">Payroll status this month</div>
+      <div class="card" style="padding:0; overflow-x:auto;">
+        <table id="payrollTable">
+          <thead><tr><th>Name</th><th>Role</th><th>Salary</th><th>Paid</th><th>Remaining</th><th>Status</th></tr></thead>
+          <tbody><tr><td colspan="6" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="section-title" id="salesPeriodLabel">Sales this month</div>
+      <div class="grid-2" style="margin-bottom:16px;">
+        <div class="card">
+          <div class="stat" id="statSalesTotal">–</div>
+          <div class="stat-label">Total revenue</div>
+        </div>
+        <div class="card">
+          <div class="stat" id="statSalesCount">–</div>
+          <div class="stat-label">Entries logged</div>
+        </div>
+      </div>
+      <div class="card" style="padding:0; overflow-x:auto;">
+        <table id="salesTable">
+          <thead><tr><th>Date</th><th>Hotel</th><th>Category</th><th>Amount</th><th>Entered by</th></tr></thead>
+          <tbody><tr><td colspan="5" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="section-title">Audit log <span class="hint" style="font-weight:400;">— last 100 actions, most recent first</span></div>
+      <div class="card" style="padding:0; overflow-x:auto;">
+        <table id="auditTable">
+          <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Status</th><th>Detail</th></tr></thead>
+          <tbody><tr><td colspan="5" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+      </div>
+
+      <div class="section-title">Ask HR data</div>
+      <div class="card">
+        <textarea id="hrAskInput" placeholder="e.g. Who was hired in the last 30 days? / What's our total monthly payroll?"></textarea>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="hrAskBtn">
+            <span class="spinner"></span><span class="btn-text">Run query</span>
+          </button>
+          <button class="btn btn-ghost" id="hrAskClear">Clear</button>
+        </div>
+      </div>
+      <div class="result-box" id="hrAskResult">
+        <div class="section-title">Generated SQL</div>
+        <div class="code-block" id="hrAskSql"></div>
+        <div class="section-title">Result</div>
+        <div class="card" style="padding:0; overflow-x:auto;" id="hrAskResultWrap">
+          <table id="hrAskResultTable"></table>
+        </div>
+      </div>
+
+      <div class="section-title">Hire, terminate, adjust salary, or record payment</div>
+
+      <div class="form-tabs" id="hrTabs">
+        <button class="form-tab active" data-form="hire">Hire</button>
+        <button class="form-tab" data-form="terminate">Terminate</button>
+        <button class="form-tab" data-form="salary">Adjust salary</button>
+        <button class="form-tab" data-form="payment">Record payment</button>
+      </div>
+
+      <!-- HIRE -->
+      <div class="card action-form active" id="hrform-hire">
+        <label class="field-label" for="hireName">Full name</label>
+        <input type="text" id="hireName" placeholder="e.g. Priya Shah">
+
+        <label class="field-label" for="hireRole">Job role</label>
+        <input type="text" id="hireRole" placeholder="e.g. Front Desk">
+
+        <label class="field-label" for="hireHotel">Hotel</label>
+        <select id="hireHotel"><option value="">Loading hotels…</option></select>
+
+        <label class="field-label" for="hireSalary">Starting salary</label>
+        <input type="number" id="hireSalary" placeholder="e.g. 25000">
+
+        <div class="btn-row">
+          <button class="btn btn-primary" id="hireBtn"><span class="spinner"></span><span class="btn-text">Propose hire</span></button>
+        </div>
+      </div>
+
+      <!-- TERMINATE -->
+      <div class="card action-form" id="hrform-terminate">
+        <label class="field-label" for="terminateEmployee">Employee</label>
+        <select id="terminateEmployee"><option value="">Loading employees…</option></select>
+
+        <div class="btn-row">
+          <button class="btn btn-danger" id="terminateBtn"><span class="spinner"></span><span class="btn-text">Propose termination</span></button>
+        </div>
+      </div>
+
+      <!-- SALARY -->
+      <div class="card action-form" id="hrform-salary">
+        <label class="field-label" for="salaryEmployee">Employee</label>
+        <select id="salaryEmployee"><option value="">Loading employees…</option></select>
+
+        <label class="field-label" for="salaryNew">New salary</label>
+        <input type="number" id="salaryNew" placeholder="e.g. 28000">
+
+        <div class="btn-row">
+          <button class="btn btn-primary" id="salaryBtn"><span class="spinner"></span><span class="btn-text">Propose salary change</span></button>
+        </div>
+      </div>
+
+      <!-- PAYMENT -->
+      <div class="card action-form" id="hrform-payment">
+        <label class="field-label" for="paymentEmployee">Employee</label>
+        <select id="paymentEmployee"><option value="">Loading employees…</option></select>
+
+        <label class="field-label" for="paymentAmount">Amount</label>
+        <input type="number" id="paymentAmount" placeholder="e.g. 25000">
+
+        <div class="field-row">
+          <div>
+            <label class="field-label" for="paymentStart">Period start</label>
+            <input type="date" id="paymentStart">
+          </div>
+          <div>
+            <label class="field-label" for="paymentEnd">Period end</label>
+            <input type="date" id="paymentEnd">
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" id="paymentBtn"><span class="spinner"></span><span class="btn-text">Propose payment</span></button>
+        </div>
+      </div>
+
+      <div class="result-box" id="hrActionPreviewBox">
+        <div class="section-title">Preview</div>
+        <div class="card" id="hrActionPreviewCard"></div>
+        <p class="expiry-note" id="hrActionExpiry"></p>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="hrConfirmBtn">
+            <span class="spinner"></span><span class="btn-text">Confirm &amp; execute</span>
+          </button>
+          <button class="btn btn-danger" id="hrDiscardBtn">Discard</button>
+        </div>
+      </div>
+
+      <div class="result-box" id="hrActionOutcomeBox">
+        <div class="section-title">Result</div>
+        <div class="card" id="hrActionOutcomeCard"></div>
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+
+</body>
+</html>
