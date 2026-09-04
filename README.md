@@ -1,1 +1,1 @@
-# multi_agent_hotel_managment
+# multi_agent_hotel_management
